@@ -1,0 +1,892 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>VulnIQ — Know What's Actually Exploitable</title>
+        <meta
+            name="description"
+            content="AI-powered CVE exploitability analysis in the context of your codebase. Stop chasing false positives. Fix what actually matters."
+        />
+        <style>
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+
+            :root {
+                --bg: #0a0c0f;
+                --bg2: #0f1318;
+                --bg3: #141920;
+                --border: #1e2730;
+                --accent: #00d4ff;
+                --accent2: #7c3aed;
+                --red: #ff4d4d;
+                --green: #00ff88;
+                --text: #e2e8f0;
+                --muted: #64748b;
+                --mono: "Courier New", Courier, monospace;
+            }
+
+            html {
+                scroll-behavior: smooth;
+            }
+
+            body {
+                background: var(--bg);
+                color: var(--text);
+                font-family:
+                    "Segoe UI",
+                    system-ui,
+                    -apple-system,
+                    sans-serif;
+                line-height: 1.6;
+                min-height: 100vh;
+            }
+
+            /* NAV */
+            nav {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                z-index: 100;
+                background: rgba(10, 12, 15, 0.85);
+                backdrop-filter: blur(12px);
+                border-bottom: 1px solid var(--border);
+                padding: 0 2rem;
+                height: 60px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+
+            .nav-logo {
+                font-family: var(--mono);
+                font-size: 1.2rem;
+                font-weight: 700;
+                color: var(--accent);
+                letter-spacing: 0.05em;
+                text-decoration: none;
+            }
+
+            .nav-logo span {
+                color: var(--text);
+            }
+
+            .nav-cta {
+                background: var(--accent);
+                color: #000;
+                font-weight: 600;
+                font-size: 0.85rem;
+                padding: 0.4rem 1.1rem;
+                border-radius: 4px;
+                text-decoration: none;
+                letter-spacing: 0.03em;
+                transition: opacity 0.2s;
+            }
+
+            .nav-cta:hover {
+                opacity: 0.85;
+            }
+
+            /* HERO */
+            .hero {
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+                padding: 6rem 2rem 4rem;
+                position: relative;
+                overflow: hidden;
+            }
+
+            .hero::before {
+                content: "";
+                position: absolute;
+                top: -200px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 800px;
+                height: 800px;
+                background: radial-gradient(
+                    circle,
+                    rgba(0, 212, 255, 0.06) 0%,
+                    transparent 70%
+                );
+                pointer-events: none;
+            }
+
+            .hero::after {
+                content: "";
+                position: absolute;
+                bottom: -100px;
+                left: 30%;
+                width: 500px;
+                height: 500px;
+                background: radial-gradient(
+                    circle,
+                    rgba(124, 58, 237, 0.05) 0%,
+                    transparent 70%
+                );
+                pointer-events: none;
+            }
+
+            .badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.4rem;
+                background: rgba(0, 212, 255, 0.08);
+                border: 1px solid rgba(0, 212, 255, 0.2);
+                color: var(--accent);
+                font-family: var(--mono);
+                font-size: 0.75rem;
+                padding: 0.3rem 0.8rem;
+                border-radius: 20px;
+                margin-bottom: 1.5rem;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+            }
+
+            .badge::before {
+                content: "";
+                width: 6px;
+                height: 6px;
+                background: var(--accent);
+                border-radius: 50%;
+                animation: pulse 2s infinite;
+            }
+
+            @keyframes pulse {
+                0%,
+                100% {
+                    opacity: 1;
+                }
+                50% {
+                    opacity: 0.3;
+                }
+            }
+
+            h1 {
+                font-size: clamp(2.2rem, 5vw, 3.8rem);
+                font-weight: 800;
+                line-height: 1.15;
+                max-width: 820px;
+                margin-bottom: 1.5rem;
+                letter-spacing: -0.02em;
+            }
+
+            h1 em {
+                font-style: normal;
+                color: var(--accent);
+            }
+
+            .hero-sub {
+                font-size: clamp(1rem, 2vw, 1.2rem);
+                color: var(--muted);
+                max-width: 560px;
+                margin-bottom: 2.5rem;
+            }
+
+            .hero-actions {
+                display: flex;
+                gap: 1rem;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .btn-primary {
+                background: var(--accent);
+                color: #000;
+                font-weight: 700;
+                font-size: 0.95rem;
+                padding: 0.8rem 2rem;
+                border-radius: 6px;
+                text-decoration: none;
+                transition:
+                    opacity 0.2s,
+                    transform 0.2s;
+            }
+
+            .btn-primary:hover {
+                opacity: 0.9;
+                transform: translateY(-1px);
+            }
+
+            .btn-secondary {
+                background: transparent;
+                color: var(--text);
+                font-weight: 600;
+                font-size: 0.95rem;
+                padding: 0.8rem 2rem;
+                border-radius: 6px;
+                border: 1px solid var(--border);
+                text-decoration: none;
+                transition:
+                    border-color 0.2s,
+                    transform 0.2s;
+            }
+
+            .btn-secondary:hover {
+                border-color: var(--accent);
+                transform: translateY(-1px);
+            }
+
+            /* TERMINAL BLOCK */
+            .terminal-wrap {
+                margin-top: 4rem;
+                width: 100%;
+                max-width: 700px;
+            }
+
+            .terminal {
+                background: var(--bg2);
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                overflow: hidden;
+                text-align: left;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            }
+
+            .terminal-bar {
+                background: var(--bg3);
+                padding: 0.6rem 1rem;
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                border-bottom: 1px solid var(--border);
+            }
+
+            .dot {
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+            }
+            .dot.r {
+                background: #ff5f57;
+            }
+            .dot.y {
+                background: #ffbd2e;
+            }
+            .dot.g {
+                background: #28c840;
+            }
+
+            .terminal-title {
+                margin-left: auto;
+                font-family: var(--mono);
+                font-size: 0.7rem;
+                color: var(--muted);
+            }
+
+            .terminal-body {
+                padding: 1.2rem 1.5rem;
+                font-family: var(--mono);
+                font-size: 0.82rem;
+                line-height: 1.8;
+            }
+
+            .t-prompt {
+                color: var(--accent);
+            }
+            .t-cmd {
+                color: var(--text);
+            }
+            .t-comment {
+                color: var(--muted);
+            }
+            .t-cve {
+                color: #fbbf24;
+            }
+            .t-red {
+                color: var(--red);
+            }
+            .t-green {
+                color: var(--green);
+            }
+            .t-dim {
+                color: var(--muted);
+            }
+
+            /* SECTIONS */
+            section {
+                padding: 5rem 2rem;
+            }
+
+            .container {
+                max-width: 1100px;
+                margin: 0 auto;
+            }
+
+            .section-label {
+                font-family: var(--mono);
+                font-size: 0.72rem;
+                color: var(--accent);
+                letter-spacing: 0.12em;
+                text-transform: uppercase;
+                margin-bottom: 0.8rem;
+            }
+
+            h2 {
+                font-size: clamp(1.6rem, 3vw, 2.4rem);
+                font-weight: 700;
+                margin-bottom: 1rem;
+                letter-spacing: -0.02em;
+            }
+
+            .section-intro {
+                color: var(--muted);
+                font-size: 1.05rem;
+                max-width: 560px;
+                margin-bottom: 3rem;
+            }
+
+            /* PROBLEM */
+            .problem {
+                background: var(--bg);
+            }
+
+            .stat-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 1.5rem;
+                margin-bottom: 3rem;
+            }
+
+            .stat-card {
+                background: var(--bg2);
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 1.5rem;
+            }
+
+            .stat-num {
+                font-size: 2.4rem;
+                font-weight: 800;
+                color: var(--red);
+                font-family: var(--mono);
+                line-height: 1;
+                margin-bottom: 0.4rem;
+            }
+
+            .stat-label {
+                color: var(--muted);
+                font-size: 0.9rem;
+            }
+
+            .problem-text {
+                max-width: 680px;
+                color: var(--muted);
+                font-size: 1rem;
+                line-height: 1.8;
+            }
+
+            .problem-text strong {
+                color: var(--text);
+            }
+
+            /* HOW IT WORKS */
+            .how {
+                background: var(--bg2);
+            }
+
+            .steps {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+                gap: 1.5rem;
+            }
+
+            .step {
+                background: var(--bg);
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 1.8rem;
+                position: relative;
+            }
+
+            .step-num {
+                font-family: var(--mono);
+                font-size: 0.72rem;
+                color: var(--accent);
+                letter-spacing: 0.1em;
+                margin-bottom: 0.8rem;
+            }
+
+            .step h3 {
+                font-size: 1.05rem;
+                font-weight: 700;
+                margin-bottom: 0.5rem;
+            }
+
+            .step p {
+                color: var(--muted);
+                font-size: 0.9rem;
+            }
+
+            /* FEATURES */
+            .features {
+                background: var(--bg);
+            }
+
+            .feature-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: 1.5rem;
+            }
+
+            .feature-card {
+                background: var(--bg2);
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 1.8rem;
+                transition: border-color 0.2s;
+            }
+
+            .feature-card:hover {
+                border-color: rgba(0, 212, 255, 0.3);
+            }
+
+            .feature-icon {
+                font-size: 1.5rem;
+                margin-bottom: 0.8rem;
+            }
+
+            .feature-card h3 {
+                font-size: 1rem;
+                font-weight: 700;
+                margin-bottom: 0.4rem;
+            }
+
+            .feature-card p {
+                color: var(--muted);
+                font-size: 0.88rem;
+            }
+
+            /* CTA */
+            .cta-section {
+                background: var(--bg2);
+                border-top: 1px solid var(--border);
+            }
+
+            .cta-inner {
+                max-width: 600px;
+                margin: 0 auto;
+                text-align: center;
+            }
+
+            .cta-inner h2 {
+                margin-bottom: 0.8rem;
+            }
+            .cta-inner p {
+                color: var(--muted);
+                margin-bottom: 2rem;
+            }
+
+            .waitlist-form {
+                display: flex;
+                gap: 0.5rem;
+                max-width: 440px;
+                margin: 0 auto;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .waitlist-form input {
+                flex: 1;
+                min-width: 200px;
+                background: var(--bg3);
+                border: 1px solid var(--border);
+                color: var(--text);
+                padding: 0.75rem 1rem;
+                border-radius: 6px;
+                font-size: 0.95rem;
+                outline: none;
+                transition: border-color 0.2s;
+            }
+
+            .waitlist-form input:focus {
+                border-color: var(--accent);
+            }
+            .waitlist-form input::placeholder {
+                color: var(--muted);
+            }
+
+            .waitlist-form button {
+                background: var(--accent);
+                color: #000;
+                font-weight: 700;
+                font-size: 0.9rem;
+                padding: 0.75rem 1.5rem;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: opacity 0.2s;
+            }
+
+            .waitlist-form button:hover {
+                opacity: 0.85;
+            }
+
+            /* FOOTER */
+            footer {
+                background: var(--bg);
+                border-top: 1px solid var(--border);
+                padding: 2rem;
+                text-align: center;
+            }
+
+            .footer-logo {
+                font-family: var(--mono);
+                font-size: 1rem;
+                color: var(--accent);
+                margin-bottom: 0.5rem;
+            }
+
+            .footer-sub {
+                font-size: 0.82rem;
+                color: var(--muted);
+            }
+
+            .footer-sub a {
+                color: var(--muted);
+                text-decoration: none;
+            }
+
+            .footer-sub a:hover {
+                color: var(--accent);
+            }
+
+            /* DIVIDER */
+            .divider {
+                height: 1px;
+                background: var(--border);
+                margin: 0;
+            }
+
+            @media (max-width: 600px) {
+                nav {
+                    padding: 0 1rem;
+                }
+                section {
+                    padding: 3.5rem 1.2rem;
+                }
+                h1 {
+                    font-size: 2rem;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <!-- NAV -->
+        <nav>
+            <a class="nav-logo" href="#">Vuln<span>IQ</span></a>
+            <a class="nav-cta" href="#waitlist">Request Access</a>
+        </nav>
+
+        <!-- HERO -->
+        <section class="hero">
+            <div class="badge">AI-Powered AppSec Intelligence</div>
+            <h1>
+                Stop chasing CVEs.<br />Start fixing <em>exploitable</em> ones.
+            </h1>
+            <p class="hero-sub">
+                VulnIQ analyzes your codebase to determine whether CVEs are
+                actually exploitable in <em>your</em> environment — not just
+                whether the vulnerable package exists.
+            </p>
+            <div class="hero-actions">
+                <a href="#waitlist" class="btn-primary">Request Early Access</a>
+                <a href="#how-it-works" class="btn-secondary">How It Works</a>
+            </div>
+
+            <div class="terminal-wrap">
+                <div class="terminal">
+                    <div class="terminal-bar">
+                        <div class="dot r"></div>
+                        <div class="dot y"></div>
+                        <div class="dot g"></div>
+                        <span class="terminal-title"
+                            >vulniq — analysis complete</span
+                        >
+                    </div>
+                    <div class="terminal-body">
+                        <div>
+                            <span class="t-prompt">$</span>
+                            <span class="t-cmd"
+                                >vulniq scan --repo ./my-app --branch main</span
+                            >
+                        </div>
+                        <div class="t-dim">
+                            Fetching CVEs from GitHub Advisory Database...
+                        </div>
+                        <div class="t-dim">
+                            Analyzing codebase context with AI...
+                        </div>
+                        <br />
+                        <div>
+                            <span class="t-cve">CVE-2024-38476</span>
+                            <span class="t-red">CRITICAL</span>
+                            <span class="t-dim">— log4j-core 2.14.1</span>
+                        </div>
+                        <div class="t-dim">
+                            &nbsp;&nbsp;→ Exploitable:
+                            <span class="t-red">YES</span> — jndi lookup path
+                            reachable via /api/search
+                        </div>
+                        <br />
+                        <div>
+                            <span class="t-cve">CVE-2024-29025</span>
+                            <span class="t-cve">HIGH</span> &nbsp;&nbsp;<span
+                                class="t-dim"
+                                >— netty-codec 4.1.86</span
+                            >
+                        </div>
+                        <div class="t-dim">
+                            &nbsp;&nbsp;→ Exploitable:
+                            <span class="t-green">NO</span> &nbsp;— affected
+                            handler not instantiated in this build
+                        </div>
+                        <br />
+                        <div>
+                            <span class="t-cve">CVE-2023-44487</span>
+                            <span class="t-cve">HIGH</span> &nbsp;&nbsp;<span
+                                class="t-dim"
+                                >— http2 rapid reset</span
+                            >
+                        </div>
+                        <div class="t-dim">
+                            &nbsp;&nbsp;→ Exploitable:
+                            <span class="t-green">NO</span> &nbsp;— HTTP/2 not
+                            enabled in server config
+                        </div>
+                        <br />
+                        <div class="t-green">
+                            ✓ 1 of 3 CVEs require immediate action. 2 false
+                            positives eliminated.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="divider"></div>
+
+        <!-- PROBLEM -->
+        <section class="problem">
+            <div class="container">
+                <div class="section-label">// the problem</div>
+                <h2>CVE noise is breaking your security team</h2>
+                <p class="section-intro">
+                    Security teams spend more time triaging false positives than
+                    fixing real vulnerabilities.
+                </p>
+
+                <div class="stat-grid">
+                    <div class="stat-card">
+                        <div class="stat-num">29,000+</div>
+                        <div class="stat-label">
+                            CVEs published in 2023 alone
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-num">~70%</div>
+                        <div class="stat-label">
+                            of flagged CVEs are not exploitable in context
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-num">Weeks</div>
+                        <div class="stat-label">
+                            lost per team per year to manual triage
+                        </div>
+                    </div>
+                </div>
+
+                <p class="problem-text">
+                    Traditional SCA tools tell you a vulnerable package is
+                    present. They don't tell you whether your code actually
+                    <strong>calls the vulnerable function</strong>, whether the
+                    attack vector is
+                    <strong>reachable from your entry points</strong>, or
+                    whether your configuration
+                    <strong>neutralizes the risk</strong>.<br /><br />
+                    VulnIQ does.
+                </p>
+            </div>
+        </section>
+
+        <div class="divider"></div>
+
+        <!-- HOW IT WORKS -->
+        <section class="how" id="how-it-works">
+            <div class="container">
+                <div class="section-label">// how it works</div>
+                <h2>Context-aware CVE analysis</h2>
+                <p class="section-intro">
+                    VulnIQ connects to your repositories and uses AI to reason
+                    about exploitability — not just presence.
+                </p>
+
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-num">STEP 01</div>
+                        <h3>Connect Your Repo</h3>
+                        <p>
+                            VulnIQ integrates with GitHub to pull your codebase
+                            and dependency manifest. Choose your LLM backend —
+                            on-prem for full data sovereignty, or cloud for
+                            maximum depth.
+                        </p>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">STEP 02</div>
+                        <h3>Ingest CVE Feed</h3>
+                        <p>
+                            Continuously pulls from GitHub Advisory Database,
+                            NVD, and OSV. Always current, always correlated to
+                            your stack.
+                        </p>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">STEP 03</div>
+                        <h3>AI Context Analysis</h3>
+                        <p>
+                            AI reasons over your actual code — call graphs,
+                            configuration, entry points — to determine real
+                            exploitability.
+                        </p>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">STEP 04</div>
+                        <h3>Prioritized Results</h3>
+                        <p>
+                            Get a ranked list of CVEs that actually matter, with
+                            plain-English explanations and suggested
+                            remediations.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="divider"></div>
+
+        <!-- FEATURES -->
+        <section class="features">
+            <div class="container">
+                <div class="section-label">// features</div>
+                <h2>Built for enterprise security teams</h2>
+                <p class="section-intro">
+                    Everything you need to cut through the noise and focus on
+                    what matters.
+                </p>
+
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">🔍</div>
+                        <h3>Codebase-Aware Triage</h3>
+                        <p>
+                            Understand exploitability in the context of your
+                            actual code, not just the vulnerable package
+                            version.
+                        </p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🔒</div>
+                        <h3>Bring Your Own LLM</h3>
+                        <p>
+                            Run analysis on-prem with a local model (Ollama,
+                            Llama 3, CodeLlama) for full data sovereignty, or
+                            connect a cloud model for maximum reasoning depth.
+                            You choose the trade-off.
+                        </p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">⚡</div>
+                        <h3>CI/CD Integration</h3>
+                        <p>
+                            Block exploitable CVEs at the PR stage. Catch
+                            vulnerabilities before they reach production.
+                        </p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📊</div>
+                        <h3>Risk Scoring</h3>
+                        <p>
+                            Every CVE scored by real-world exploitability, not
+                            just CVSS. Prioritize fixes by actual business risk.
+                        </p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🗂️</div>
+                        <h3>Multi-Repo Dashboard</h3>
+                        <p>
+                            Track vulnerability posture across your entire
+                            codebase portfolio in one place.
+                        </p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📝</div>
+                        <h3>Audit-Ready Reports</h3>
+                        <p>
+                            Generate compliance and audit documentation
+                            automatically. SOC 2, PCI, NIST-ready exports.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="divider"></div>
+
+        <!-- CTA / WAITLIST -->
+        <section class="cta-section" id="waitlist">
+            <div class="container">
+                <div class="cta-inner">
+                    <div class="section-label">// early access</div>
+                    <h2>Be first in line</h2>
+                    <p>
+                        VulnIQ is in private early access. Join the waitlist and
+                        we'll reach out when we're ready for you.
+                    </p>
+                    <form class="waitlist-form" onsubmit="handleSubmit(event)">
+                        <input
+                            type="email"
+                            placeholder="you@company.com"
+                            required
+                        />
+                        <button type="submit">Join Waitlist</button>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- FOOTER -->
+        <footer>
+            <div class="footer-logo">VulnIQ</div>
+            <div class="footer-sub">
+                A
+                <a href="https://quantegy.io" target="_blank">Quantegy</a>
+                product &nbsp;·&nbsp;
+                <a href="mailto:hello@vulniq.io">hello@vulniq.io</a>
+            </div>
+        </footer>
+
+        <script>
+            function handleSubmit(e) {
+                e.preventDefault();
+                const btn = e.target.querySelector("button");
+                const input = e.target.querySelector("input");
+                btn.textContent = "✓ You're on the list";
+                btn.style.background = "#00ff88";
+                input.disabled = true;
+                btn.disabled = true;
+            }
+        </script>
+    </body>
+</html>
