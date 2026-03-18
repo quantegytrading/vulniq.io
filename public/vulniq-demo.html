@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VulnIQ — CVE Exploitability Analysis</title>
+
+  <style>
+    :root {
+      --bg: #0a0c0f;
+      --surface: #0f1318;
+      --surface-2: #141920;
+      --border: #1e2730;
+      --border-hover: #2a3540;
+      --text: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --muted: #64748b;
+      --accent: #00d4ff;
+      --accent-dim: rgba(0,212,255,.12);
+      --accent-glow: rgba(0,212,255,.08);
+      --danger: #ff4d4d;
+      --danger-dim: rgba(255,77,77,.12);
+      --warning: #fbbf24;
+      --warning-dim: rgba(251,191,36,.12);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      --mono: 'Courier New', Courier, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ── Nav ─────────────────────────────────────────── */
+    nav {
+      width: 100%;
+      padding: 1.25rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(10,12,15,.85);
+    }
+
+    .nav-left {
+      display: flex;
+      align-items: center;
+      gap: .65rem;
+    }
+
+    .nav-logo {
+      font-family: var(--mono);
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: .05em;
+      text-decoration: none;
+    }
+
+    .nav-logo span {
+      color: var(--text);
+    }
+
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .nav-status {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      font-size: .75rem;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    .nav-status .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
+    }
+
+    /* ── Layout ──────────────────────────────────────── */
+    .page {
+      width: 100%;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem 4rem;
+      flex: 1;
+    }
+
+    /* ── Hero ────────────────────────────────────────── */
+    .hero {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .section-label {
+      font-family: var(--mono);
+      font-size: .7rem;
+      font-weight: 500;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      margin-bottom: .75rem;
+    }
+
+    .hero h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -.03em;
+      line-height: 1.15;
+      margin-bottom: .75rem;
+    }
+
+    .hero h1 .highlight {
+      color: var(--accent);
+    }
+
+    .hero p {
+      color: var(--text-secondary);
+      font-size: .95rem;
+      line-height: 1.6;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+
+    /* ── Card ────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 2rem;
+      position: relative;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: var(--radius);
+      padding: 1px;
+      background: linear-gradient(180deg, rgba(0,212,255,.1) 0%, transparent 40%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+
+    .card-label {
+      font-family: var(--mono);
+      font-size: .65rem;
+      font-weight: 500;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      margin-bottom: 1.25rem;
+    }
+
+    /* ── Form ────────────────────────────────────────── */
+    .form-group { margin-bottom: 1.1rem; }
+
+    label {
+      display: block;
+      font-size: .72rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: .4rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    label .optional {
+      text-transform: none;
+      font-weight: 400;
+      color: var(--muted);
+      letter-spacing: normal;
+    }
+
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: .7rem .9rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: .85rem;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    input[type="text"]:focus, input[type="password"]:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    input::placeholder {
+      color: #2a3540;
+      font-family: var(--mono);
+    }
+
+    .row { display: flex; gap: 1rem; }
+    .row .form-group { flex: 1; }
+
+    /* ── Button ──────────────────────────────────────── */
+    button.primary {
+      width: 100%;
+      padding: .8rem;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: var(--font);
+      font-size: .9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: box-shadow .2s, transform .1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .5rem;
+      letter-spacing: -.01em;
+    }
+
+    button.primary:hover {
+      box-shadow: 0 0 20px var(--accent-dim), 0 0 60px rgba(0,212,255,.06);
+    }
+
+    button.primary:active { transform: scale(.99); }
+
+    button.primary:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(0,0,0,.2);
+      border-top-color: #000;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Config toggle ───────────────────────────────── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 1rem 0 .5rem;
+    }
+
+    .config-toggle {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      cursor: pointer;
+      padding: .5rem 0;
+      user-select: none;
+    }
+
+    .config-toggle .chevron {
+      font-size: .55rem;
+      transition: transform .2s;
+      color: var(--muted);
+    }
+
+    .config-toggle .chevron.open { transform: rotate(90deg); }
+
+    .config-toggle h3 {
+      font-family: var(--mono);
+      font-size: .72rem;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .config-toggle .badge {
+      font-family: var(--mono);
+      font-size: .6rem;
+      padding: .2rem .5rem;
+      border-radius: 4px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-weight: 500;
+      letter-spacing: .02em;
+    }
+
+    .config-toggle .badge.active {
+      background: var(--accent-dim);
+      border-color: rgba(0,212,255,.2);
+      color: var(--accent);
+    }
+
+    .config-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height .3s ease;
+    }
+    .config-body.open { max-height: 600px; }
+
+    .config-body .hint {
+      font-size: .75rem;
+      color: var(--muted);
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+
+    .config-body .hint code {
+      font-family: var(--mono);
+      font-size: .7rem;
+      background: var(--surface-2);
+      padding: .15rem .35rem;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+
+    /* ── Results ─────────────────────────────────────── */
+    #results {
+      margin-top: 1.5rem;
+      display: none;
+    }
+    #results.visible { display: block; }
+
+    .scanning-label {
+      font-family: var(--mono);
+      font-size: .65rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      margin-bottom: .75rem;
+    }
+
+    .progress-bar-wrap {
+      background: var(--surface-2);
+      border-radius: 4px;
+      height: 4px;
+      margin-bottom: 1.25rem;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      border-radius: 4px;
+      transition: width .4s ease;
+    }
+
+    .repo-row .repo-status-text {
+      font-family: var(--mono);
+      font-size: .6rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    .repo-row.scanning .repo-status-text {
+      color: var(--accent);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes scanPulse {
+      0%, 100% { border-color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+      50%      { border-color: rgba(0,212,255,.4); box-shadow: 0 0 16px rgba(0,212,255,.15); }
+    }
+
+    @keyframes scanDot {
+      0%   { content: ''; }
+      25%  { content: '.'; }
+      50%  { content: '..'; }
+      75%  { content: '...'; }
+      100% { content: ''; }
+    }
+
+    .repo-row.streaming {
+      animation: fadeIn .3s ease;
+    }
+
+    .repo-row.pending {
+      opacity: .4;
+    }
+
+    .repo-row.scanning {
+      animation: scanPulse 1.5s ease-in-out infinite;
+    }
+
+    .repo-row.scanning .repo-status-text::after {
+      content: '';
+      animation: scanDot 1.2s steps(1) infinite;
+    }
+
+    .result-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.75rem 2rem;
+      position: relative;
+    }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .result-header .icon {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .85rem; flex-shrink: 0;
+      font-family: var(--mono);
+    }
+
+    .result-header .icon.success {
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    .result-header .icon.error {
+      background: var(--danger-dim);
+      color: var(--danger);
+    }
+
+    .result-header h3 {
+      font-size: .95rem;
+      font-weight: 600;
+      letter-spacing: -.01em;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .6rem;
+      margin-bottom: 1rem;
+    }
+
+    .stat {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: .75rem 1rem;
+    }
+
+    .stat .stat-label {
+      font-family: var(--mono);
+      font-size: .6rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .stat .stat-value {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin-top: .15rem;
+      letter-spacing: -.03em;
+    }
+
+    .stat .stat-value.text-sm {
+      font-size: .95rem;
+      font-weight: 600;
+    }
+
+    /* ── Repo rows ───────────────────────────────────── */
+    .repo-list {
+      margin-top: .75rem;
+      display: flex;
+      flex-direction: column;
+      gap: .4rem;
+    }
+
+    .repo-row {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: .7rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .75rem;
+      transition: border-color .15s;
+    }
+
+    .repo-row:hover {
+      border-color: var(--border-hover);
+    }
+
+    .repo-row .repo-name {
+      font-family: var(--mono);
+      font-weight: 500;
+      font-size: .8rem;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .repo-row .repo-meta {
+      display: flex;
+      gap: .6rem;
+      align-items: center;
+      flex-shrink: 0;
+      font-family: var(--mono);
+      font-size: .65rem;
+      color: var(--muted);
+    }
+
+    .pill {
+      font-family: var(--mono);
+      padding: .2rem .5rem;
+      border-radius: 4px;
+      font-size: .6rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    .pill.success {
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+    .pill.error {
+      background: var(--danger-dim);
+      color: var(--danger);
+    }
+    .pill.partial {
+      background: var(--warning-dim);
+      color: var(--warning);
+    }
+
+    .error-message {
+      color: var(--danger);
+      font-size: .85rem;
+      line-height: 1.6;
+      font-family: var(--mono);
+    }
+
+    /* ── Footer ──────────────────────────────────────── */
+    footer {
+      width: 100%;
+      text-align: center;
+      padding: 2rem 1.5rem;
+      border-top: 1px solid var(--border);
+    }
+
+    footer .footer-brand {
+      font-weight: 700;
+      font-size: .8rem;
+      margin-bottom: .3rem;
+    }
+
+    footer .footer-sub {
+      font-size: .7rem;
+      color: var(--muted);
+    }
+
+    footer .footer-sub a {
+      color: var(--text-secondary);
+      text-decoration: none;
+    }
+
+    footer .footer-sub a:hover {
+      color: var(--accent);
+    }
+
+    /* ── Responsive ──────────────────────────────────── */
+    @media (max-width: 540px) {
+      .hero h1 { font-size: 1.5rem; }
+      .row { flex-direction: column; gap: 0; }
+      .stats { grid-template-columns: 1fr; }
+      .repo-row { flex-direction: column; align-items: flex-start; gap: .4rem; }
+      .repo-row .repo-meta { width: 100%; justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="nav-left">
+      <a href="#" class="nav-logo">Vuln<span>IQ</span></a>
+    </div>
+    <div class="nav-right">
+      <div class="nav-status">
+        <span class="dot"></span>
+        <span>connected</span>
+      </div>
+    </div>
+  </nav>
+
+  <div class="page">
+    <div class="hero">
+      <p class="section-label">// analyze</p>
+      <h1>Scan for <span class="highlight">exploitable</span> CVEs.</h1>
+      <p>Connect a GitHub org and repo to analyze whether flagged CVEs are actually reachable in your codebase.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-label">// target</div>
+
+      <form id="analyze-form">
+        <div class="row">
+          <div class="form-group">
+            <label for="github-org">GitHub Org</label>
+            <input type="text" id="github-org" placeholder="my-org" required>
+          </div>
+          <div class="form-group">
+            <label for="github-repo">Repository <span class="optional">(optional)</span></label>
+            <input type="text" id="github-repo" placeholder="all repos if blank">
+          </div>
+        </div>
+
+        <button type="submit" class="primary" id="submit-btn">
+          <span id="btn-text">Run Analysis</span>
+        </button>
+
+        <hr class="divider">
+
+        <div class="config-toggle" id="config-toggle">
+          <span class="chevron" id="config-chevron">&#9654;</span>
+          <h3>Configuration</h3>
+          <span class="badge" id="config-badge">server defaults</span>
+        </div>
+
+        <div class="config-body" id="config-body">
+          <p class="hint">Override server-side environment variables. Leave blank to use the server's <code>.env</code> defaults.</p>
+
+          <div class="form-group">
+            <label for="cfg-github-token">GitHub Token</label>
+            <input type="password" id="cfg-github-token" placeholder="ghp_xxxxxxxxxxxx">
+          </div>
+
+          <div class="form-group">
+            <label for="cfg-model">LLM Model</label>
+            <input type="text" id="cfg-model" placeholder="gpt-4">
+          </div>
+
+          <div class="form-group">
+            <label for="cfg-llm-url">LLM URL</label>
+            <input type="text" id="cfg-llm-url" placeholder="https://your-llm-endpoint">
+          </div>
+
+          <div class="row">
+            <div class="form-group">
+              <label for="cfg-sat-id">SAT Client ID</label>
+              <input type="text" id="cfg-sat-id" placeholder="client-id">
+            </div>
+            <div class="form-group">
+              <label for="cfg-sat-secret">SAT Client Secret</label>
+              <input type="password" id="cfg-sat-secret" placeholder="client-secret">
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div id="results">
+      <div class="result-card" id="result-content"></div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="footer-brand">VulnIQ</div>
+    <div class="footer-sub">A <a href="https://quantegyiq.com/">QuantegyIQ</a> product &middot; AI-powered CVE Exploitability Analysis</div>
+  </footer>
+
+  <script>
+    const form    = document.getElementById('analyze-form');
+    const btn     = document.getElementById('submit-btn');
+    const btnText = document.getElementById('btn-text');
+    const results = document.getElementById('results');
+    const content = document.getElementById('result-content');
+
+    // Config toggle
+    const configToggle  = document.getElementById('config-toggle');
+    const configBody    = document.getElementById('config-body');
+    const configChevron = document.getElementById('config-chevron');
+    const configBadge   = document.getElementById('config-badge');
+
+    const cfgFields = [
+      'cfg-github-token', 'cfg-model', 'cfg-llm-url', 'cfg-sat-id', 'cfg-sat-secret'
+    ];
+
+    configToggle.addEventListener('click', () => {
+      configBody.classList.toggle('open');
+      configChevron.classList.toggle('open');
+    });
+
+    cfgFields.forEach(id => {
+      document.getElementById(id).addEventListener('input', updateConfigBadge);
+    });
+
+    function updateConfigBadge() {
+      const hasOverrides = cfgFields.some(id => document.getElementById(id).value.trim());
+      if (hasOverrides) {
+        configBadge.textContent = 'custom overrides';
+        configBadge.classList.add('active');
+      } else {
+        configBadge.textContent = 'server defaults';
+        configBadge.classList.remove('active');
+      }
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const org  = document.getElementById('github-org').value.trim();
+      const repo = document.getElementById('github-repo').value.trim();
+      if (!org) return;
+
+      const body = { github_org: org };
+      if (repo) body.github_repo = repo;
+
+      const token     = document.getElementById('cfg-github-token').value.trim();
+      const model     = document.getElementById('cfg-model').value.trim();
+      const llmUrl    = document.getElementById('cfg-llm-url').value.trim();
+      const satId     = document.getElementById('cfg-sat-id').value.trim();
+      const satSecret = document.getElementById('cfg-sat-secret').value.trim();
+
+      if (token)     body.github_token      = token;
+      if (model)     body.model             = model;
+      if (llmUrl)    body.llm_url           = llmUrl;
+      if (satId)     body.sat_client_id     = satId;
+      if (satSecret) body.sat_client_secret = satSecret;
+
+      btn.disabled = true;
+      const scope = repo ? `${org}/${repo}` : `all repos in ${org}`;
+      btnText.innerHTML = `<span class="spinner"></span> Analyzing ${escapeHtml(scope)}&hellip;`;
+      results.classList.remove('visible');
+      content.innerHTML = '';
+
+      try {
+        const resp = await fetch('/api/analyze/stream', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'text/event-stream',
+          },
+          body: JSON.stringify(body)
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => null);
+          throw new Error(err?.detail || `Server responded with ${resp.status}`);
+        }
+
+        results.classList.add('visible');
+
+        // State tracking
+        let allRepos = [];
+        let completedResults = [];
+        let totalFound = 0;
+        let totalAnalyzed = 0;
+
+        // Set up initial streaming UI
+        content.innerHTML = `
+          <div class="scanning-label">// scanning</div>
+          <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar"></div></div>
+          <div class="stats" id="live-stats">
+            <div class="stat"><div class="stat-label">Repos</div><div class="stat-value" id="stat-repos">0 / ?</div></div>
+            <div class="stat"><div class="stat-label">Issues Found</div><div class="stat-value" id="stat-found">0</div></div>
+            <div class="stat"><div class="stat-label">Analyzed</div><div class="stat-value" id="stat-analyzed">0</div></div>
+            <div class="stat"><div class="stat-label">Status</div><div class="stat-value text-sm" id="stat-status">scanning&hellip;</div></div>
+          </div>
+          <div class="repo-list" id="live-repos"></div>
+        `;
+
+        const progressBar = document.getElementById('progress-bar');
+        const statRepos   = document.getElementById('stat-repos');
+        const statFound   = document.getElementById('stat-found');
+        const statAnalyzed= document.getElementById('stat-analyzed');
+        const statStatus  = document.getElementById('stat-status');
+        const liveRepos   = document.getElementById('live-repos');
+
+        // Read SSE stream
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          // Parse complete SSE messages from buffer
+          let boundary;
+          while ((boundary = buffer.indexOf('\n\n')) !== -1) {
+            const raw = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+
+            let eventType = 'message';
+            let dataStr = '';
+            for (const line of raw.split('\n')) {
+              if (line.startsWith('event: ')) eventType = line.slice(7);
+              else if (line.startsWith('data: ')) dataStr += line.slice(6);
+            }
+            if (!dataStr) continue;
+
+            const data = JSON.parse(dataStr);
+
+            if (eventType === 'repo_list') {
+              allRepos = data.repos;
+              statRepos.textContent = `0 / ${allRepos.length}`;
+              // Render all repos as pending
+              liveRepos.innerHTML = allRepos.map(name => `
+                <div class="repo-row pending" id="repo-${cssId(name)}">
+                  <span class="repo-name">${escapeHtml(name)}</span>
+                  <span class="repo-meta">
+                    <span class="repo-status-text">queued</span>
+                  </span>
+                </div>
+              `).join('');
+              // Update button
+              btnText.innerHTML = `<span class="spinner"></span> Scanning ${allRepos.length} repos&hellip;`;
+            }
+
+            else if (eventType === 'repo_start') {
+              const row = document.getElementById(`repo-${cssId(data.repo)}`);
+              if (row) {
+                row.classList.remove('pending');
+                row.classList.add('scanning');
+                row.querySelector('.repo-meta').innerHTML = `<span class="repo-status-text">scanning</span>`;
+              }
+              btnText.innerHTML = `<span class="spinner"></span> ${escapeHtml(data.repo)} (${data.index + 1}/${data.total})&hellip;`;
+            }
+
+            else if (eventType === 'repo_done') {
+              completedResults.push(data);
+              totalFound += data.issues_found;
+              totalAnalyzed += data.issues_analyzed;
+
+              const pct = Math.round((completedResults.length / allRepos.length) * 100);
+              progressBar.style.width = pct + '%';
+              statRepos.textContent = `${completedResults.length} / ${allRepos.length}`;
+              statFound.textContent = totalFound;
+              statAnalyzed.textContent = totalAnalyzed;
+
+              const row = document.getElementById(`repo-${cssId(data.repo)}`);
+              if (row) {
+                row.classList.remove('scanning', 'pending');
+                row.classList.add('streaming');
+                row.innerHTML = `
+                  <span class="repo-name">${escapeHtml(data.repo)}</span>
+                  <span class="repo-meta">
+                    <span>${data.issues_found} found</span>
+                    <span>${data.issues_analyzed} analyzed</span>
+                    <span class="pill ${data.status}">${escapeHtml(data.status)}</span>
+                  </span>
+                `;
+              }
+            }
+
+            else if (eventType === 'summary') {
+              progressBar.style.width = '100%';
+              statRepos.textContent = data.repos_analyzed;
+              statFound.textContent = data.total_issues_found;
+              statAnalyzed.textContent = data.total_issues_analyzed;
+              statStatus.textContent = data.status;
+              document.querySelector('.scanning-label').textContent = '// results';
+
+              // Add header
+              const header = document.createElement('div');
+              header.className = 'result-header';
+              header.style.marginBottom = '1rem';
+              const iconClass = data.status === 'error' ? 'error' : 'success';
+              const iconChar  = data.status === 'error' ? '\u2717' : '\u2713';
+              header.innerHTML = `<div class="icon ${iconClass}">${iconChar}</div><h3>${escapeHtml(data.message)}</h3>`;
+              content.insertBefore(header, content.firstChild);
+            }
+
+            else if (eventType === 'error') {
+              throw new Error(data.detail || 'Unknown server error');
+            }
+          }
+        }
+      } catch (err) {
+        results.classList.add('visible');
+        content.innerHTML = `
+          <div class="result-header">
+            <div class="icon error">&#10005;</div>
+            <h3>Analysis Failed</h3>
+          </div>
+          <p class="error-message">${escapeHtml(err.message)}</p>
+        `;
+      } finally {
+        btn.disabled = false;
+        btnText.textContent = 'Run Analysis';
+      }
+    });
+
+    function cssId(name) {
+      return name.replace(/[^a-zA-Z0-9-_]/g, '-');
+    }
+
+    function escapeHtml(str) {
+      const d = document.createElement('div');
+      d.appendChild(document.createTextNode(str));
+      return d.innerHTML;
+    }
+  </script>
+</body>
+</html>
